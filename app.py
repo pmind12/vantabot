@@ -14,7 +14,7 @@ def get_vanta_token():
         "grant_type": "client_credentials",
         "client_id": VANTA_CLIENT_ID,
         "client_secret": VANTA_CLIENT_SECRET,
-        "scope": "knowledge-base:read"
+        "scope": "vanta-api.all:read"
     }
 
     print("🔐 Requesting Vanta token...", flush=True)

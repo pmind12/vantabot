@@ -15,21 +15,26 @@ def get_vanta_token():
         "client_id": VANTA_CLIENT_ID,
         "client_secret": VANTA_CLIENT_SECRET
     }
+    print("🔐 Requesting Vanta access token...")
     response = requests.post(url, json=payload)
+    print(f"✅ Vanta token response: {response.status_code} – {response.text}")
     response.raise_for_status()
     return response.json()["access_token"]
 
 def search_kb_articles(query):
+    print(f"🔎 Searching Vanta KB for: {query}")
     token = get_vanta_token()
     headers = {
         "Authorization": f"Bearer {token}"
     }
     url = f"https://api.vanta.com/v1/knowledge-base/articles?query={query}"
     response = requests.get(url, headers=headers)
+    print(f"📡 Vanta KB response: {response.status_code} – {response.text}")
     response.raise_for_status()
     return response.json()
 
 def send_slack_message(channel, text):
+    print(f"💬 Sending Slack message to {channel}: {text}")
     url = "https://slack.com/api/chat.postMessage"
     headers = {
         "Authorization": f"Bearer {SLACK_BOT_TOKEN}",
@@ -39,21 +44,24 @@ def send_slack_message(channel, text):
         "channel": channel,
         "text": text
     }
-    requests.post(url, json=payload, headers=headers)
+    resp = requests.post(url, json=payload, headers=headers)
+    print(f"📤 Slack response: {resp.status_code} – {resp.text}")
 
 @app.route("/slack/events", methods=["POST"])
 def slack_events():
     data = request.json
+    print(f"📥 Incoming Slack event: {data}")
 
-    # Slack verification challenge
+    # Verification challenge
     if "challenge" in data:
         return jsonify({"challenge": data["challenge"]})
 
-    # Handle app_mention event
     if "event" in data and data["event"]["type"] == "app_mention":
         event = data["event"]
-        user_question = event.get("text", "").split(">")[-1].strip()  # Remove bot mention
-        channel = event["channel"]
+        text = event.get("text", "")
+        channel = event.get("channel", "")
+        user_question = text.split(">")[-1].strip()
+        print(f"🧠 Parsed question: '{user_question}' from channel {channel}")
 
         try:
             results = search_kb_articles(user_question)
@@ -62,12 +70,14 @@ def slack_events():
                 article = articles[0]
                 title = article["attributes"]["title"]
                 url = article["attributes"]["url"]
-                send_slack_message(channel, f"🔍 I found something:\n*<{url}|{title}>*")
+                response_text = f"🔍 I found something:\n*<{url}|{title}>*"
             else:
-                send_slack_message(channel, "🤔 Sorry, I couldn't find anything relevant in the Knowledge Base.")
+                response_text = "🤔 Sorry, I couldn't find anything relevant in the Knowledge Base."
         except Exception as e:
-            print("Error:", str(e))
-            send_slack_message(channel, "⚠️ Something went wrong while searching Vanta. Please try again later.")
+            print(f"❌ Error while querying Vanta: {e}")
+            response_text = "⚠️ Something went wrong while searching Vanta. Please try again later."
+
+        send_slack_message(channel, response_text)
 
     return jsonify({"ok": True})
 
